@@ -259,6 +259,7 @@ class Synthesizer(nn.Module):
         text: str = "",
         speaker_name: str = "",
         language_name: str = "",
+        speaker_embeddings=None,
         speaker_wav=None,
         style_wav=None,
         style_text=None,
@@ -273,6 +274,7 @@ class Synthesizer(nn.Module):
             text (str): input text.
             speaker_name (str, optional): speaker id for multi-speaker models. Defaults to "".
             language_name (str, optional): language id for multi-language models. Defaults to "".
+            speaker_embeddings (np.ndarray, optional): precomputed speaker embeddings. Defaults to None.
             speaker_wav (Union[str, List[str]], optional): path to the speaker wav for voice cloning. Defaults to None.
             style_wav ([type], optional): style waveform for GST. Defaults to None.
             style_text ([type], optional): transcription of style_wav for Capacitron. Defaults to None.
@@ -288,7 +290,7 @@ class Synthesizer(nn.Module):
 
         if not text and not reference_wav:
             raise ValueError(
-                "You need to define either `text` (for sythesis) or a `reference_wav` (for voice conversion) to use the Coqui TTS API."
+                "You need to define either `text` (for synthesis) or a `reference_wav` (for voice conversion) to use the Coqui TTS API."
             )
 
         if text:
@@ -302,11 +304,11 @@ class Synthesizer(nn.Module):
         if "voice_dir" in kwargs:
             self.voice_dir = kwargs["voice_dir"]
             kwargs.pop("voice_dir")
-        speaker_embedding = None
+        speaker_embedding = speaker_embeddings
         speaker_id = None
         if self.tts_speakers_file or hasattr(self.tts_model.speaker_manager, "name_to_id"):
             if speaker_name and isinstance(speaker_name, str) and not self.tts_config.model == "xtts":
-                if self.tts_config.use_d_vector_file:
+                if self.tts_config.use_d_vector_file and speaker_embedding is None:
                     # get the average speaker embedding from the saved d_vectors.
                     speaker_embedding = self.tts_model.speaker_manager.get_mean_embedding(
                         speaker_name, num_samples=None, randomize=False
@@ -318,10 +320,10 @@ class Synthesizer(nn.Module):
             # handle Neon models with single speaker.
             elif len(self.tts_model.speaker_manager.name_to_id) == 1:
                 speaker_id = list(self.tts_model.speaker_manager.name_to_id.values())[0]
-            elif not speaker_name and not speaker_wav:
+            elif not speaker_name and not speaker_wav and speaker_embedding is None:
                 raise ValueError(
                     " [!] Looks like you are using a multi-speaker model. "
-                    "You need to define either a `speaker_idx` or a `speaker_wav` to use a multi-speaker model."
+                    "You need to define either a `speaker_idx`, a `speaker_wav`, or `speaker_embeddings` to use a multi-speaker model."
                 )
             else:
                 speaker_embedding = None
